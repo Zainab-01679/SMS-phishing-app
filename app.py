@@ -8,6 +8,22 @@ tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
 model = AutoModelForSequenceClassification.from_pretrained(MODEL_PATH)
 model.eval()
 
+def telecom_safe_rule(text):
+    text_lower = text.lower()
+
+    telecom_keywords = [
+        "mtn", "glo", "airtel", "9mobile",
+        "*131#", "*556#", "*123#",
+        "data bundle", "airtime", "subscription",
+        "balance", "recharge", "gb", "mb"
+    ]
+
+    # If it's clearly telecom-related, treat as LEGIT
+    if any(word in text_lower for word in telecom_keywords):
+        return 0  # legitimate
+
+    return None
+    
 import torch
 import torch.nn.functional as F
 
