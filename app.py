@@ -23,17 +23,23 @@ def telecom_safe_rule(text):
         return 0  # legitimate
 
     return None
-    
+
 import torch
 import torch.nn.functional as F
 
 def predict_sms(text):
+    # STEP 1: rule check first
+    rule_result = telecom_safe_rule(text)
+    if rule_result is not None:
+        return rule_result, 0.99  # high confidence for rule-based legit
+
+    # STEP 2: ML model prediction
     inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
 
     with torch.no_grad():
         outputs = model(**inputs)
 
-    probs = F.softmax(outputs.logits, dim=1)
+    probs = torch.nn.functional.softmax(outputs.logits, dim=1)
     confidence, pred = torch.max(probs, dim=1)
 
     return pred.item(), confidence.item()
