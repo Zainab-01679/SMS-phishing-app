@@ -11,7 +11,6 @@ model.eval()
 def smart_rules(text):
     t = text.lower()
 
-    # SAFE telecom patterns (VERY IMPORTANT)
     safe_patterns = [
         "mtn", "glo", "airtel", "9mobile",
         "*131#", "*556#", "*123#",
@@ -19,7 +18,6 @@ def smart_rules(text):
         "balance", "subscription", "gb", "mb"
     ]
 
-    # HIGH RISK phishing patterns
     risky_patterns = [
         "click link", "verify account", "urgent action",
         "bank account locked", "update kyc",
@@ -33,7 +31,7 @@ def smart_rules(text):
         return "PHISH_RULE"
 
     return None
-
+    
 import torch
 import torch.nn.functional as F
 
