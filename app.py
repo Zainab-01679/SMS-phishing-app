@@ -49,7 +49,7 @@ def ml_predict(text):
     return pred.item(), confidence.item()
 
     def predict_sms(text):
-    rule = smart_rules(text)
+    t = text.lower()
 
     # CASE 1: SAFE RULE (MTN, Airtime, etc.)
     if rule == "LEGIT_RULE":
