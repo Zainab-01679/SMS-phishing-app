@@ -1,98 +1,119 @@
 import streamlit as st
 import torch
+import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
+# =========================
+# LOAD MODEL
+# =========================
 MODEL_PATH = "Mimsss/SMS-phishing-model"
 
 tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
 model = AutoModelForSequenceClassification.from_pretrained(MODEL_PATH)
+model.eval()
 
-# ---------------- RULE SYSTEM ---------------- #
+
+# =========================
+# RULE ENGINE
+# =========================
 def smart_rules(text):
     t = text.lower()
 
-    telecom_keywords = [
-        "mtn", "airtel", "glo", "9mobile",
-        "balance", "recharged", "credited",
-        "data bundle", "valid till", "bonus"
+    safe_patterns = [
+        "mtn", "glo", "airtel", "9mobile",
+        "*131#", "*556#", "*123#",
+        "data bundle", "airtime", "recharge",
+        "balance", "subscription", "gb", "mb"
     ]
 
-    phishing_keywords = [
-        "click", "verify", "urgent", "suspend",
-        "login", "account blocked", "claim",
-        "win", "prize", "bvn"
+    risky_patterns = [
+        "click link", "verify account", "urgent action",
+        "bank account locked", "update kyc",
+        "win prize", "lottery", "free money"
     ]
 
-    if "http" in t or "www" in t:
-        return "PHISHING_RULE"
-
-    if any(word in t for word in phishing_keywords):
-        return "PHISHING_RULE"
-
-    if any(word in t for word in telecom_keywords):
+    if any(p in t for p in safe_patterns):
         return "LEGIT_RULE"
 
-    return "UNKNOWN"
+    if any(p in t for p in risky_patterns):
+        return "PHISH_RULE"
 
-# ---------------- PAGE CONFIG ---------------- #
-st.set_page_config(page_title="SMS Threat Dashboard", layout="wide")
+    return None
 
-# ---------------- HEADER ---------------- #
-st.title("SMS Threat Intelligence Dashboard")
-st.caption("Hybrid AI + Rule-Based Smishing Detection System")
 
-# ---------------- LAYOUT ---------------- #
-col1, col2 = st.columns([2, 1])
+# =========================
+# ML PREDICTION
+# =========================
+def ml_predict(text):
+    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
 
-with col1:
-    text = st.text_area("Enter SMS Message", height=150)
-
-with col2:
-    st.subheader("System Status")
-    st.write("Model: Active")
-    st.write("Rules Engine: Active")
-
-# ---------------- ANALYSIS ---------------- #
-if st.button("Run Analysis"):
-
-    rule = smart_rules(text)
-
-    if rule == "LEGIT_RULE":
-        prediction = "LEGIT"
-        confidence = 0.95
-        reason = "Recognized telecom/balance message"
-
-    elif rule == "PHISHING_RULE":
-        prediction = "PHISHING"
-        confidence = 0.95
-        reason = "Matched phishing pattern"
-
-    else:
-        inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
+    with torch.no_grad():
         outputs = model(**inputs)
 
-        probs = torch.nn.functional.softmax(outputs.logits, dim=1)
-        confidence = torch.max(probs).item()
-        pred = torch.argmax(probs).item()
+    probs = F.softmax(outputs.logits, dim=1)
+    confidence, pred = torch.max(probs, dim=1)
 
-        if confidence < 0.6:
-            prediction = "UNCERTAIN"
-            reason = "Low confidence prediction"
+    return pred.item(), confidence.item()
+
+
+# =========================
+# FINAL DECISION ENGINE
+# =========================
+def predict_sms(text):
+    rule = smart_rules(text)
+
+    # Rule-based decisions
+    if rule == "LEGIT_RULE":
+        return "LEGIT", 0.99, "Recognized telecom/balance message"
+
+    if rule == "PHISH_RULE":
+        return "PHISH", 0.99, "Matched common phishing pattern"
+
+    # ML prediction
+    pred, conf = ml_predict(text)
+
+    # Confidence threshold
+    if conf < 0.65:
+        return "UNCERTAIN", conf, "Low confidence prediction"
+
+    label = "PHISH" if pred == 1 else "LEGIT"
+    return label, conf, "AI model prediction"
+
+
+# =========================
+# STREAMLIT UI
+# =========================
+st.set_page_config(
+    page_title="SMS Security AI",
+    page_icon="📱",
+    layout="centered"
+)
+
+st.title("📱 SMS Phishing Detection System")
+st.write("Detect whether an SMS is Legitimate or a Phishing attempt")
+
+sms = st.text_area("Enter SMS message")
+
+if st.button("Predict"):
+    if sms.strip():
+
+        label, confidence, reason = predict_sms(sms)
+        percent = confidence * 100
+
+        st.markdown("---")
+
+        if label == "PHISH":
+            st.error("⚠️ PHISHING MESSAGE DETECTED")
+        elif label == "LEGIT":
+            st.success("✅ LEGITIMATE MESSAGE")
         else:
-            prediction = "PHISHING" if pred == 1 else "LEGIT"
-            reason = "AI model prediction"
+            st.warning("⚠️ UNCERTAIN MESSAGE")
 
-    # ---------------- RESULTS ---------------- #
-    st.subheader("Analysis Result")
+        st.metric("Confidence Score", f"{percent:.2f}%")
+        st.progress(confidence)
 
-    st.write("Prediction:", prediction)
-    st.write("Confidence Score:", round(confidence, 2))
-    st.write("Detection Reason:", reason)
+        st.info(f"🧠 Reason: {reason}")
 
-    # ---------------- CONFIDENCE BAR ---------------- #
-    st.subheader("Confidence Level")
-    st.progress(int(confidence * 100))
-
-    # ---------------- RULE OUTPUT ---------------- #
-    st.subheader("Rule Engine Output")
-    st.write(rule)
+    else:
+        st.warning("Please enter message")
+        
