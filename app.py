@@ -94,7 +94,7 @@ st.write("Detect whether an SMS is Legitimate or a Phishing attempt")
 
 sms = st.text_area("Enter SMS message")
 
-if st.button("Analyze"):
+if st.button("Predict"):
     if sms.strip():
 
         label, confidence, reason = predict_sms(sms)
