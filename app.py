@@ -115,5 +115,5 @@ if st.button("Predict"):
         st.info(f"🧠 Reason: {reason}")
 
     else:
-        st.warning("Please enter message")
+        st.warning("Please enter a message")
         
