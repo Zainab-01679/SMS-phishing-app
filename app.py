@@ -8,65 +8,96 @@ tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
 model = AutoModelForSequenceClassification.from_pretrained(MODEL_PATH)
 model.eval()
 
-def telecom_safe_rule(text):
-    text_lower = text.lower()
+def smart_rules(text):
+    t = text.lower()
 
-    telecom_keywords = [
+    # SAFE telecom patterns (VERY IMPORTANT)
+    safe_patterns = [
         "mtn", "glo", "airtel", "9mobile",
         "*131#", "*556#", "*123#",
-        "data bundle", "airtime", "subscription",
-        "balance", "recharge", "gb", "mb"
+        "data bundle", "airtime", "recharge",
+        "balance", "subscription", "gb", "mb"
     ]
 
-    # If it's clearly telecom-related, treat as LEGIT
-    if any(word in text_lower for word in telecom_keywords):
-        return 0  # legitimate
+    # HIGH RISK phishing patterns
+    risky_patterns = [
+        "click link", "verify account", "urgent action",
+        "bank account locked", "update kyc",
+        "win prize", "lottery", "free money"
+    ]
+
+    if any(p in t for p in safe_patterns):
+        return "LEGIT_RULE"
+
+    if any(p in t for p in risky_patterns):
+        return "PHISH_RULE"
 
     return None
 
 import torch
 import torch.nn.functional as F
 
-def predict_sms(text):
-    # STEP 1: rule check first
-    rule_result = telecom_safe_rule(text)
-    if rule_result is not None:
-        return rule_result, 0.99  # high confidence for rule-based legit
-
-    # STEP 2: ML model prediction
+def ml_predict(text):
     inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
 
     with torch.no_grad():
         outputs = model(**inputs)
 
-    probs = torch.nn.functional.softmax(outputs.logits, dim=1)
+    probs = F.softmax(outputs.logits, dim=1)
     confidence, pred = torch.max(probs, dim=1)
 
     return pred.item(), confidence.item()
 
-st.set_page_config(page_title="SMS Phishing Detector", page_icon="📱", layout="centered")
+    def predict_sms(text):
+    rule = smart_rules(text)
 
-st.title("📱 SMS Phishing Detection App")
-st.write("Check if an SMS is safe or a phishing attempt")
+    # CASE 1: SAFE RULE (MTN, Airtime, etc.)
+    if rule == "LEGIT_RULE":
+        return "LEGIT", 0.99, "Matched telecom/bank safe pattern"
 
-sms = st.text_area("Enter SMS message here")
+    # CASE 2: HIGH RISK RULE
+    if rule == "PHISH_RULE":
+        return "PHISH", 0.99, "Matched known phishing pattern"
 
-if st.button("Predict"):
+    # CASE 3: ML MODEL
+    pred, conf = ml_predict(text)
+
+    # confidence threshold (VERY IMPORTANT)
+    if conf < 0.65:
+        return "UNCERTAIN", conf, "Low confidence model prediction"
+
+    label = "PHISH" if pred == 1 else "LEGIT"
+    reason = "AI model prediction"
+
+    return label, conf, reason
+
+st.set_page_config(page_title="SMS Security AI", page_icon="📱", layout="centered")
+
+st.title("📱 SMS Security Detection System")
+st.write("Production-grade phishing detection using AI + rules")
+
+sms = st.text_area("Enter SMS message")
+
+if st.button("Analyze"):
+
     if sms.strip():
 
-        label, confidence = predict_sms(sms)
+        label, confidence, reason = predict_sms(sms)
         percent = confidence * 100
 
         st.markdown("---")
 
-        if label == 1:
-            st.error("⚠️ Phishing Message Detected!")
+        if label == "PHISH":
+            st.error("⚠️ PHISHING DETECTED")
+        elif label == "LEGIT":
+            st.success("✅ LEGITIMATE MESSAGE")
         else:
-            st.success("✅ Legitimate Message")
+            st.warning("⚠️ UNCERTAIN MESSAGE")
 
-        st.metric(label="Confidence Score", value=f"{percent:.2f}%")
-
+        st.metric("Confidence Score", f"{percent:.2f}%")
         st.progress(confidence)
+
+        st.info(f"🧠 Reason: {reason}")
 
     else:
         st.warning("Please enter a message")
