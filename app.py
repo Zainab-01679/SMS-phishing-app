@@ -24,6 +24,7 @@ def smart_rules(text):
         "*131#", "*556#", "*123#",
         "data bundle", "airtime", "recharge",
         "balance", "subscription", "gb", "mb"
+        "credited", "banking"
     ]
 
     risky_patterns = [
